@@ -835,6 +835,10 @@ function setDir(dx,dy){
   let ndx = dx, ndy = dy;
   if(task.reverseControls){ ndx = -dx; ndy = -dy; }
   if(ndx === -dir.x && ndy === -dir.y) return;
+  // Safety: don't allow a turn that immediately runs into own body
+  const testHead = {x:snake[0].x+ndx, y:snake[0].y+ndy};
+  const wouldHitBody = snake.some((s,i)=>i>0 && s.x===testHead.x && s.y===testHead.y);
+  if(wouldHitBody) return;
   nextDir = {x:ndx,y:ndy};
 }
 
@@ -846,15 +850,19 @@ window.addEventListener('keydown', e=>{
 });
 
 let touchX=0, touchY=0;
-canvas.addEventListener('touchstart', e=>{ touchX=e.touches[0].clientX; touchY=e.touches[0].clientY; },{passive:false});
+canvas.addEventListener('touchstart', e=>{ 
+  if(!e.touches[0]) return;
+  touchX=e.touches[0].clientX; 
+  touchY=e.touches[0].clientY; 
+},{passive:false});
 canvas.addEventListener('touchend', e=>{
   if(!e.changedTouches[0]) return;
   const dx = e.changedTouches[0].clientX - touchX;
   const dy = e.changedTouches[0].clientY - touchY;
   if(Math.abs(dx)>Math.abs(dy)){
-    if(Math.abs(dx)>35) setDir(dx>0?1:0, 0);
+    if(Math.abs(dx)>45) setDir(dx>0?1:0, 0);
   } else {
-    if(Math.abs(dy)>35) setDir(0, dy>0?1:-1);
+    if(Math.abs(dy)>45) setDir(0, dy>0?1:-1);
   }
 },{passive:false});
 
