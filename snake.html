@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Snake - Dopamine Edition</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #050508;
+    --panel: #0f0f1a;
+    --accent: #00f3ff;
+    --accent2: #ff00ff;
+    --accent3: #00ff88;
+    --danger: #ff2a2a;
+    --warn: #ffcc00;
+    --text: #e2e8ff;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; touch-action: none; }
+  .stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 50%, #0a0a14 0%, #050508 100%); }
+  #gameCanvas { border: 3px solid #1a1a2e; box-shadow: 0 0 40px rgba(0,243,255,0.15), inset 0 0 60px rgba(0,243,255,0.05); border-radius: 14px; background: #07070c; cursor: crosshair; max-width: 90vw; max-height: 75vh; display: block; }
+  .ui { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; z-index: 10; pointer-events: none; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; font-size: 0.7rem; text-shadow: 0 0 10px rgba(0,243,255,0.6); flex-wrap: wrap; justify-content: center; }
+  .stat { background: rgba(15,15,26,0.8); padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(0,243,255,0.25); backdrop-filter: blur(6px); min-width: 65px; text-align: center; }
+  .stat-label { color: #889; font-size: 0.55rem; margin-bottom: 3px; display: block; }
+  .stat-val { font-size: 1.2rem; display: block; }
+  .stat-val.highlight { color: var(--accent); text-shadow: 0 0 12px var(--accent); }
+  .stat-val.combo { color: var(--accent2); text-shadow: 0 0 12px var(--accent2); }
+  .stat-val.multi { color: var(--accent3); text-shadow: 0 0 12px var(--accent3); }
+  .stat-val.level { color: var(--warn); text-shadow: 0 0 12px var(--warn); }
+  .task-display { position: absolute; top: 78px; left: 50%; transform: translateX(-50%); background: rgba(15,15,26,0.92); padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(0,243,255,0.25); backdrop-filter: blur(6px); font-size: 0.75rem; color: #cfdef8; text-align: center; max-width: 92vw; pointer-events: none; z-index: 6; display: none; }
+  .task-display .goal-val { color: var(--warn); font-weight: 900; }
+  .overlay { position: absolute; inset: 0; background: rgba(5,5,8,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(8px); transition: opacity 0.2s; }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .overlay.none { display: none !important; }
+  .title { font-size: 2.6rem; font-weight: 900; letter-spacing: 8px; margin-bottom: 10px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px var(--accent)); }
+  .subtitle { color: #889; margin-bottom: 22px; font-size: 0.9rem; letter-spacing: 3px; }
+  .card { background: var(--panel); padding: 28px 34px; border-radius: 20px; border: 1px solid rgba(0,243,255,0.3); box-shadow: 0 0 60px rgba(0,243,255,0.12); text-align: center; max-width: 420px; width: 90vw; }
+  .btn { margin: 8px 6px 0; padding: 13px 32px; font-family: inherit; font-size: 0.9rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #000; background: var(--accent); border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 0 20px var(--accent); transition: transform 0.1s, filter 0.1s, box-shadow 0.2s; }
+  .btn:hover { filter: brightness(1.15); box-shadow: 0 0 30px var(--accent); }
+  .btn:active { transform: scale(0.94); }
+  .btn.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); box-shadow: none; }
+  .btn.secondary:hover { box-shadow: 0 0 15px var(--accent); }
+  .btn.danger { background: var(--danger); color: #fff; box-shadow: 0 0 20px var(--danger); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; filter: none; }
+  .task-box { margin: 14px 0; padding: 14px 18px; background: rgba(0,243,255,0.06); border: 1px solid rgba(0,243,255,0.2); border-radius: 12px; color: #cfdef8; font-size: 0.9rem; line-height: 1.5; }
+  .task-box b { color: var(--accent); }
+  .task-box .goal { color: var(--warn); font-weight: 900; }
+  .progress-bar { margin-top: 10px; height: 6px; background: #1a1a2e; border-radius: 3px; overflow: hidden; border: 1px solid #222; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.3s; }
+  .hud-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 40; pointer-events: none; text-align: center; opacity: 0; transition: opacity 0.2s; }
+  .big-num { font-size: 5.5rem; font-weight: 900; color: var(--accent); text-shadow: 0 0 35px var(--accent); display: block; line-height: 1; }
+  .combo-tag { font-size: 1.7rem; color: var(--accent2); text-shadow: 0 0 22px var(--accent2); font-weight: 900; margin-top: 6px; display: block; }
+  .level-tag { font-size: 1.5rem; color: var(--warn); text-shadow: 0 0 22px var(--warn); font-weight: 900; margin-top: 8px; display: block; }
+  .controls-hint { position: absolute; bottom: 22px; color: #445; font-size: 0.68rem; letter-spacing: 1px; text-transform: uppercase; pointer-events: none; }
+  .powerup { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 10; pointer-events: none; flex-wrap: wrap; }
+  .pill { padding: 6px 14px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px); opacity: 0.9; white-space: nowrap; }
+  .pill.slow { background: rgba(0,243,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .pill.mult { background: rgba(0,255,136,0.15); color: var(--accent3); border-color: var(--accent3); }
+  .pill.ghost { background: rgba(255,0,255,0.15); color: var(--accent2); border-color: var(--accent2); }
+  .flash { position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: 0; transition: opacity 0.15s; }
+  @keyframes shake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-5px,0)} 40%{transform:translate(5px,0)} 60%{transform:translate(-3px,0)} 80%{transform:translate(3px,0)} }
+  .shake { animation: shake 0.35s ease-in-out; }
+  .mobile-dpad { position: absolute; bottom: 110px; width: 210px; height: 210px; pointer-events: none; display: flex; align-items: center; justify-content: center; opacity: 0.4; }
+  .dpad-ring { width: 140px; height: 140px; border: 2px solid rgba(0,243,255,0.25); border-radius: 50%; position: relative; }
+  .dpad-arrow { position: absolute; width: 0; height: 0; border-style: solid; opacity: 0.75; }
+  .up { top: -10px; left: 50%; transform: translateX(-50%); border-width: 0 13px 20px 13px; border-color: transparent transparent var(--accent) transparent; }
+  .down { bottom: -10px; left: 50%; transform: translateX(-50%); border-width: 20px 13px 0 13px; border-color: var(--accent) transparent transparent transparent; }
+  .left { left: -10px; top: 50%; transform: translateY(-50%); border-width: 13px 20px 13px 0; border-color: transparent var(--accent) transparent transparent; }
+  .right { right: -10px; top: 50%; transform: translateY(-50%); border-width: 13px 0 13px 20px; border-color: transparent transparent transparent var(--accent); }
+  @media (max-width: 600px) {
+    .ui { gap: 10px; font-size: 0.6rem; }
+    .stat { padding: 7px 10px; min-width: 55px; }
+    .stat-val { font-size: 1rem; }
+    .title { font-size: 1.9rem; letter-spacing: 4px; }
+    .card { padding: 22px 18px; }
+    .btn { padding: 12px 22px; font-size: 0.85rem; }
+    .big-num { font-size: 3.4rem; }
+    .task-display { top: 74px; font-size: 0.68rem; padding: 8px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
+
+  <div class="ui">
+    <div class="stat"><span class="stat-label">level</span><span id="statLevel" class="stat-val level">1</span></div>
+    <div class="stat"><span class="stat-label">score</span><span id="statScore" class="stat-val highlight">0</span></div>
+    <div class="stat"><span class="stat-label">combo</span><span id="statCombo" class="stat-val combo">x1</span></div>
+    <div class="stat"><span class="stat-label">mult</span><span id="statMult" class="stat-val multi">x1</span></div>
+    <div class="stat"><span class="stat-label">best</span><span id="statBest" class="stat-val">0</span></div>
+  </div>
+
+  <div class="task-display" id="taskDisplay">
+    <span id="taskText"></span> <span id="taskProg" class="goal-val">0/0</span>
+  </div>
+
+  <div class="powerup" id="powerupContainer"></div>
+
+  <div class="hud-center" id="hudCenter">
+    <span id="bigNum" class="big-num">0</span>
+    <span id="comboTag" class="combo-tag">COMBO</span>
+    <span id="levelTag" class="level-tag" style="display:none;">LEVEL COMPLETE</span>
+  </div>
+
+  <div class="flash" id="flash"></div>
+
+  <div class="mobile-dpad">
+    <div class="dpad-ring">
+      <div class="dpad-arrow up" data-dir="up"></div>
+      <div class="dpad-arrow down" data-dir="down"></div>
+      <div class="dpad-arrow left" data-dir="left"></div>
+      <div class="dpad-arrow right" data-dir="right"></div>
+    </div>
+  </div>
+
+  <div class="controls-hint">arrows / wasd / tap</div>
+
+  <button class="btn secondary" id="btnHint" style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:25;">
+    💡 Hint (<span id="hintCost">-10%</span>)
+  </button>
+
+  <div class="overlay" id="overlayMenu">
+    <div class="card">
+      <div class="title">NEON SNAKE</div>
+      <div class="subtitle">hardcore dopamine edition</div>
+      <div style="margin-bottom: 12px; color: #889; font-size: 0.78rem;">
+        best: <span id="menuBest" style="color:var(--accent);font-weight:900">0</span> &nbsp;|&nbsp; level: <span id="menuLevel" style="color:var(--warn);font-weight:900">1</span>
+      </div>
+      <div class="task-box" id="menuTask"></div>
+      <button class="btn" id="btnStart">start game</button>
+      <button class="btn secondary" id="btnReset">reset best</button>
+    </div>
+  </div>
+
+  <div class="overlay none" id="overlayLevelComplete">
+    <div class="card">
+      <div class="title" style="background:linear-gradient(90deg,var(--accent3),var(--warn));-webkit-text-fill-color:transparent;">level complete!</div>
+      <div id="lcReward" style="font-size:1.5rem;color:var(--accent3);font-weight:900;margin:8px 0 4px;">+0 bonus</div>
+      <div id="lcPenalty" style="font-size:0.8rem;color:var(--accent2);margin-bottom:10px;"></div>
+      <div class="progress-bar"><div id="lcProgress" class="progress-fill" style="width:0%"></div></div>
+      <button class="btn" id="btnNextLevel">next level</button>
+      <button class="btn secondary" id="btnMenuLc">menu</button>
+    </div>
+  </div>
+
+  <div class="overlay none" id="overlayGameOver">
+    <div class="card">
+      <div class="title" style="background:linear-gradient(90deg,var(--danger),var(--warn));-webkit-text-fill-color:transparent;">game over</div>
+      <div style="margin:8px 0 4px; color:#889; font-size:0.78rem;">you hit yourself or an obstacle. restart from level 1.</div>
+      <div id="goScore" style="font-size:2.6rem;font-weight:900;color:var(--text);margin-bottom:8px;">0</div>
+      <div style="margin-bottom:4px; color:#889; font-size:0.78rem;">best score</div>
+      <div id="goBest" style="font-size:2.6rem;font-weight:900;color:var(--accent);margin-bottom:14px;">0</div>
+      <button class="btn danger" id="btnRetry">play again</button>
+      <button class="btn secondary" id="btnMenuGo">menu</button>
+    </div>
+  </div>
+
+  <div class="overlay none" id="overlayHint">
+    <div class="card">
+      <div class="title" style="font-size:1.8rem;">💡 Hint</div>
+      <div id="hintText" class="task-box" style="font-size:1rem;line-height:1.8;padding:18px;"></div>
+      <div style="margin-top:10px;color:var(--warn);font-size:0.85rem;">
+        Bonus penalty: <span id="hintPenaltyText">-10%</span>
+      </div>
+      <button class="btn" id="btnCloseHint">Got it!</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ACCENT = '#00f3ff';
+const ACCENT2 = '#ff00ff';
+const ACCENT3 = '#00ff88';
+const WARN = '#ffcc00';
+const DANGER = '#ff2a2a';
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const GS = 20;
+const COLS = canvas.width / GS;
+const ROWS = canvas.height / GS;
+
+let audioCtx;
+function initAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+function playTone(freq, type='square', duration=0.08, vol=0.1){
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + duration);
+}
+function eatSound(){ playTone(700 + Math.random()*180, 'square', 0.06, 0.12); }
+function powerSound(){ playTone(950, 'sine', 0.12, 0.1); }
+function dieSound(){ playTone(120, 'sawtooth', 0.5, 0.18); setTimeout(()=>playTone(80, 'sawtooth', 0.5, 0.18), 120); }
+function levelUpSound(){ [520,620,780,1040].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.18,0.15), i*130)); }
+
+// ---------- 120 LEVELS ----------
+const LEVELS = (function build(){
+  const L = [];
+  const MAX = 120;
+
+  function lvl(level, key, text, value, h1, h2, h3, flags={}){
+    return { level, key, text, value, hint1:h1, hint2:h2, hint3:h3, ...flags };
+  }
+
+  // 1-20 Basic
+  L.push(lvl(1,'eat','Eat <span class="goal">5</span> food',5,'Move around and collect glowing food','Use arrow keys or WASD to steer','Head for food, avoid yourself'));
+  L.push(lvl(2,'eat','Eat <span class="goal">8</span> food',8,'Keep moving toward each food','Don’t stop between snacks','Avoid looping into your tail'));
+  L.push(lvl(3,'combo','Reach <span class="goal">x3</span> combo',3,'Eat food quickly in a row','Don’t let the combo timer expire','Chain bites without pausing'));
+  L.push(lvl(4,'time','Survive <span class="goal">15s</span>',15,'Stay alive for 15 seconds','Move in circles to buy time','Watch your tail as it grows'));
+  L.push(lvl(5,'eat','Eat <span class="goal">10</span> food',10,'Ten meals to clear the level','Plan a path through the grid','Avoid cutting too close to walls'));
+  L.push(lvl(6,'power','Collect <span class="goal">2</span> power-ups',2,'Grab glowing power-up orbs','Slow or Ghost orbs help','Don’t ignore the side pickups'));
+  L.push(lvl(7,'score','Score <span class="goal">150</span> points',150,'Each food is worth points','Multiplier boosts your score','Eat fast to multiply'));
+  L.push(lvl(8,'eat','Eat <span class="goal">12</span> food',12,'More food, longer tail','Mind your growing body','Keep turns smooth'));
+  L.push(lvl(9,'combo','Reach <span class="goal">x4</span> combo',4,'Chain four quick eats','Speed up your rhythm','Don’t break the streak'));
+  L.push(lvl(10,'time','Survive <span class="goal">20s</span>',20,'Outlast 20 seconds','Use the whole board','Don’t trap yourself in corners'));
+  L.push(lvl(11,'eat','Eat <span class="goal">15</span> food',15,'Fifteen bites to advance','Tail is now a hazard','Circle carefully'));
+  L.push(lvl(12,'power','Collect <span class="goal">3</span> power-ups',3,'Three power orbs appear','Try Ghost to pass through','Slow helps precision'));
+  L.push(lvl(13,'score','Score <span class="goal">250</span> points',250,'Reach 250 points','Use multiplier for big points','Combo stacking matters'));
+  L.push(lvl(14,'eat','Eat <span class="goal">18</span> food',18,'Eighteen meals','The board feels tighter','Don’t rush into yourself'));
+  L.push(lvl(15,'combo','Reach <span class="goal">x5</span> combo',5,'Five in a row','Keep the pace steady','Anticipate food spawns'));
+  L.push(lvl(16,'time','Survive <span class="goal">25s</span>',25,'Last 25 seconds','Keep moving in loops','Watch for tight spaces'));
+  L.push(lvl(17,'eat','Eat <span class="goal">20</span> food',20,'Twenty foods','Long snake, big danger','Hug the edges when needed'));
+  L.push(lvl(18,'power','Collect <span class="goal">4</span> power-ups',4,'Four orbs to collect','Switch between powers','Time your pickups'));
+  L.push(lvl(19,'score','Score <span class="goal">400</span> points',400,'Hit 400 points','Multiplier x2 helps a lot','Chain combos for more'));
+  L.push(lvl(20,'eat','Eat <span class="goal">25</span> food',25,'Boss level: 25 foods','Longest tail yet','Take it slow and steady'));
+
+  // 21-40 Strategic
+  L.push(lvl(21,'speed_eat','Eat <span class="goal">8</span> food in <span class="goal">30s</span>',8,'Eat 8 foods before 30 seconds','Speed matters, don’t dawdle','Quick turns, quick bites',{speedEat:true, timeLimit:30}));
+  L.push(lvl(22,'no_power','Eat <span class="goal">15</span> food without power-ups',15,'Ignore all power-up orbs','Just eat plain food','Don’t get distracted by side items',{noPower:true}));
+  L.push(lvl(23,'maintain_combo','Keep combo ≥ <span class="goal">3</span> for <span class="goal">15s</span>',3,'Maintain combo x3 for 15 seconds','Don’t let it drop below 3','Keep eating regularly',{maintainCombo:true, comboMin:3, holdTime:15}));
+  L.push(lvl(24,'perfect_score','Don’t miss <span class="goal">10</span> spawned food',10,'Every food must be eaten','Don’t let any food vanish','Perfect run required',{perfectScore:true}));
+  L.push(lvl(25,'speed_eat','Eat <span class="goal">10</span> food in <span class="goal">35s</span>',10,'Ten foods in 35 seconds','Move with purpose','Don’t overthink the path',{speedEat:true, timeLimit:35}));
+  L.push(lvl(26,'no_power','Eat <span class="goal">20</span> food without power-ups',20,'Twenty plain foods','Power-ups are traps here','Stay focused on eating',{noPower:true}));
+  L.push(lvl(27,'maintain_combo','Keep combo ≥ <span class="goal">4</span> for <span class="goal">20s</span>',4,'Hold x4 combo for 20 seconds','Rapid steady eating','Don’t miss a beat',{maintainCombo:true, comboMin:4, holdTime:20}));
+  L.push(lvl(28,'perfect_score','Don’t miss <span class="goal">15</span> spawned food',15,'Fifteen perfect eats','No food left behind','Precision is key',{perfectScore:true}));
+  L.push(lvl(29,'speed_eat','Eat <span class="goal">12</span> food in <span class="goal">40s</span>',12,'Twelve foods in 40 seconds','Keep momentum','Plan shortcuts',{speedEat:true, timeLimit:40}));
+  L.push(lvl(30,'no_power','Eat <span class="goal">25</span> food without power-ups',25,'Strategic boss: no powers','Pure snake skill','Twenty-five clean meals',{noPower:true}));
+
+  // 41-60 Advanced
+  L.push(lvl(31,'size_limit','Eat <span class="goal">20</span> food without exceeding length <span class="goal">25</span>',20,'Stop growing at 25 segments','Eat carefully, don’t overgrow','If too long, you can’t finish',{sizeLimit:25}));
+  L.push(lvl(32,'corner_food','Eat <span class="goal">8</span> food from corners only',8,'Only corner foods count','Head to the four corners','Ignore center food',{cornerFood:true}));
+  L.push(lvl(33,'edge_runner','Stay within 3 tiles of edges for <span class="goal">20s</span>',20,'Hug the border for 20 seconds','Don’t wander to center','Edge running keeps you safe',{edgeRunner:true}));
+  L.push(lvl(34,'zigzag','Change direction <span class="goal">15</span> times',15,'Zigzag 15 times','Alternate left and right','Don’t go straight too long',{zigzag:15}));
+  L.push(lvl(35,'size_limit','Eat <span class="goal">25</span> food without exceeding length <span class="goal">30</span>',25,'Grow to 25, cap at 30','Control your length','Don’t let tail trap you',{sizeLimit:30}));
+  L.push(lvl(36,'corner_food','Eat <span class="goal">10</span> food from corners only',10,'Ten corner meals','Camp the corners','Center food is forbidden',{cornerFood:true}));
+  L.push(lvl(37,'edge_runner','Stay within 3 tiles of edges for <span class="goal">25s</span>',25,'Edge hugging for 25 seconds','Stay close to walls','Don’t drift inward',{edgeRunner:true}));
+  L.push(lvl(38,'zigzag','Change direction <span class="goal">20</span> times',20,'Twenty direction changes','Snake-like zigzag pattern','Keep switching',{zigzag:20}));
+  L.push(lvl(39,'double_challenge','Eat <span class="goal">15</span> food AND reach combo <span class="goal">x5</span>',15,'Two goals at once','Eat 15 while keeping combo x5','Balance speed and streak',{doubleChallenge:true, comboGoal:5}));
+  L.push(lvl(40,'size_limit','Eat <span class="goal">30</span> food without exceeding length <span class="goal">35</span>',30,'Advanced boss: 30 foods, max length 35','Very tight margin','Don’t grow too much',{sizeLimit:35}));
+
+  // 61-80 Expert
+  L.push(lvl(41,'blind_spots','Eat <span class="goal">15</span> food (invisible until close)',15,'Food hides until you’re near','Within 3 tiles it appears','Use memory of the board',{blindSpots:true}));
+  L.push(lvl(42,'power_sequence','Collect power-ups in order: Slow → Mult → Ghost',3,'Collect Slow first','Then Mult','Finish with Ghost',{powerSequence:['slow','mult','ghost']}));
+  L.push(lvl(43,'center_avoid','Avoid center grid area for <span class="goal">30s</span>',30,'Stay out of the middle','The center is forbidden','Circle the outer ring',{centerAvoid:true}));
+  L.push(lvl(44,'ultra_speed','Eat <span class="goal">10</span> food at 2× speed',10,'Everything moves at double speed','React faster','Don’t overshoot turns',{ultraSpeed:2}));
+  L.push(lvl(45,'blind_spots','Eat <span class="goal">20</span> food (invisible until close)',20,'Twenty hidden foods','Stay within 3 tiles to see','Memorize spawns',{blindSpots:true}));
+  L.push(lvl(46,'power_sequence','Collect power-ups in order: Mult → Ghost → Slow',3,'Mult first','Then Ghost','Slow last',{powerSequence:['mult','ghost','slow']}));
+  L.push(lvl(47,'center_avoid','Avoid center grid area for <span class="goal">35s</span>',35,'35 seconds outside center','Don’t cross the middle','Perimeter only',{centerAvoid:true}));
+  L.push(lvl(48,'ultra_speed','Eat <span class="goal">15</span> food at 2× speed',15,'Fifteen foods at double speed','Quick reactions required','Plan ahead',{ultraSpeed:2}));
+  L.push(lvl(49,'endurance','Eat <span class="goal">20</span> food while obstacles spawn',20,'Obstacles keep appearing','Dodge new blocks while eating','Survive the chaos',{endurance:true}));
+  L.push(lvl(50,'blind_spots','Eat <span class="goal">25</span> food invisible (boss)',25,'Expert boss: all food hidden','Stay near to reveal','Perfect spatial memory',{blindSpots:true}));
+
+  // 81-100 Master
+  L.push(lvl(51,'reverse_controls','Eat <span class="goal">15</span> food (Y axis reversed)',15,'Up moves down, down moves up','Your brain will fight you','Trust the reversal',{reverseControls:true}));
+  L.push(lvl(52,'ultra_speed','Eat <span class="goal">20</span> food at 3× speed',20,'Triple speed chaos','Barely time to think','Reflexes only',{ultraSpeed:3}));
+  L.push(lvl(53,'endurance','Survive <span class="goal">60s</span> with obstacles',60,'One minute of dodging','Blocks keep coming','Don’t stop moving',{endurance:true, timeLimit:60}));
+  L.push(lvl(54,'combo','Reach <span class="goal">x20</span> combo',20,'Twenty in a row','No breaks allowed','Pure rhythm',{}));
+  L.push(lvl(55,'reverse_controls','Eat <span class="goal">20</span> food (Y axis reversed)',20,'Reversed Y again','Double the confusion','Adapt or die',{reverseControls:true}));
+  L.push(lvl(56,'ultra_speed','Eat <span class="goal">25</span> food at 3× speed',25,'Twenty-five at triple speed','Blur mode','Don’t blink',{ultraSpeed:3}));
+  L.push(lvl(57,'endurance','Survive <span class="goal">75s</span> with obstacles',75,'Seventy-five seconds','Nonstop obstacles','Keep circling',{endurance:true, timeLimit:75}));
+  L.push(lvl(58,'combo','Reach <span class="goal">x30</span> combo',30,'Thirty combo','God-tier chain','Don’t mess up',{}));
+  L.push(lvl(59,'double_challenge','Survive <span class="goal">40s</span> AND reach combo <span class="goal">x15</span>',40,'Survive 40s with x15 combo','Two hard conditions','Endurance plus rhythm',{doubleChallenge:true, comboGoal:15, timeLimit:40}));
+  L.push(lvl(60,'ultra_speed','Eat <span class="goal">30</span> food at 3× speed (boss)',30,'Master boss: 30 foods at triple speed','Maximum velocity','Final test of speed',{ultraSpeed:3}));
+
+  // 101-120 Legendary
+  L.push(lvl(101,'blind_spots','Eat <span class="goal">30</span> food with corners only + invisible',30,'Hidden food, corners only','Double restriction','Near and corner',{blindSpots:true, cornerFood:true}));
+  L.push(lvl(102,'reverse_controls','Eat <span class="goal">30</span> food at 3× speed + reversed Y',30,'Reversed and tripled','Brain overload','Fight your instincts',{reverseControls:true, ultraSpeed:3}));
+  L.push(lvl(103,'endurance','Survive <span class="goal">90s</span> avoiding center + obstacles',90,'No center, blocks everywhere','Perimeter defense','Ninety seconds of hell',{endurance:true, centerAvoid:true, timeLimit:90}));
+  L.push(lvl(104,'power_sequence','Collect Slow→Mult→Ghost→Slow with perfect score',4,'Four powers in order','No missed food','Perfect execution',{powerSequence:['slow','mult','ghost','slow'], perfectScore:true}));
+  L.push(lvl(105,'size_limit','Eat <span class="goal">40</span> food, max length <span class="goal">40</span>, zigzag 30×',40,'Eat 40 but stay at length 40','Plus 30 zigzags','Extreme control',{sizeLimit:40, zigzag:30}));
+  L.push(lvl(106,'blind_spots','Eat <span class="goal">35</span> food, reversed Y, invisible food',35,'Three modifiers at once','Hidden and reversed','Legendary difficulty',{blindSpots:true, reverseControls:true}));
+  L.push(lvl(107,'ultra_speed','Eat <span class="goal">40</span> food at 4× speed, maintain x10',40,'Quadruple speed','Keep combo x10','Impossible pace',{ultraSpeed:4, maintainCombo:true, comboMin:10}));
+  L.push(lvl(108,'corner_food','Eat <span class="goal">40</span> corner food, edge runner 60s',40,'Corners plus edges','No center allowed',{cornerFood:true, edgeRunner:true, timeLimit:60}));
+  L.push(lvl(109,'double_challenge','Eat <span class="goal">50</span> food AND reach combo <span class="goal">x40</span>',50,'Double boss conditions','Fifty foods, forty combo','The penultimate wall',{doubleChallenge:true, comboGoal:40}));
+  L.push(lvl(110,'score','Score <span class="goal">15000</span> points, survive <span class="goal">90s</span>, perfect 100 food',15000,'Fifteen thousand points','Ninety seconds','One hundred perfect eats',{score:15000, timeLimit:90, perfectScore:true}));
+  L.push(lvl(111,'blind_spots','Eat <span class="goal">45</span> food at 4× speed + reversed + invisible',45,'All three speed modifiers','Quad speed, reversed, hidden','Nearly unfair',{blindSpots:true, reverseControls:true, ultraSpeed:4}));
+  L.push(lvl(112,'endurance','Survive <span class="goal">120s</span>, obstacles every second',120,'Two minutes','Constant obstacle spawn','Ultimate endurance',{endurance:true, timeLimit:120}));
+  L.push(lvl(113,'size_limit','Eat <span class="goal">50</span> food, max length <span class="goal">45</span>',50,'Eat more than your max length','Impossible growth','Plan every segment',{sizeLimit:45}));
+  L.push(lvl(114,'time','Survive <span class="goal">120s</span> AND reach combo <span class="goal">x30</span>',120,'Two minutes with x30 combo','Marathon plus chain','Legendary stamina',{timeLimit:120, maintainCombo:true, comboMin:30}));
+  L.push(lvl(115,'reverse_controls','Eat <span class="goal">50</span> corner food, reversed Y, blind spots',50,'Triple threat legendary','Corners, reversed, hidden','Brain breaker',{reverseControls:true, blindSpots:true, cornerFood:true}));
+  L.push(lvl(116,'ultra_speed','Score <span class="goal">10000</span> at 4× speed',10000,'Ten thousand points at quad speed','No time to think','Pure reflex',{ultraSpeed:4, score:10000}));
+  L.push(lvl(117,'double_challenge','All modifiers except final boss',60,'Nearly everything active','Speed, reverse, blind, obstacles','Prepare for the end',{ultraSpeed:3, reverseControls:true, blindSpots:true, endurance:true, powerSequence:['slow','mult','ghost']}));
+  L.push(lvl(118,'score','Eat <span class="goal">70</span> food AND reach combo <span class="goal">x45</span>',70,'Seventy foods, forty-five combo','Double legend','Almost there',{doubleChallenge:true, comboGoal:45}));
+  L.push(lvl(119,'endurance','Survive <span class="goal">180s</span>, eat <span class="goal">60</span> food, all obstacles',180,'Three minutes, sixty foods','Obstacles nonstop','The gatekeeper',{endurance:true, timeLimit:180}));
+  L.push(lvl(120,'boss_level','FINAL BOSS: combo x50, score 15000, survive 600s, perfect 100 food, all modifiers',50,'Ultra speed, reverse, blind, obstacles','No power-ups allowed','One hundred perfect eats','Ten minutes of hell','You must be flawless',{bossLevel:true, ultraSpeed:3, reverseControls:true, blindSpots:true, endurance:true, noPower:true, perfectScore:true, comboGoal:50, scoreGoal:15000, timeLimit:600}));
+
+  for(let i=L.length;i<MAX;i++){
+    const lvlNum = i+1;
+    L.push(lvl(lvlNum,'eat','Eat <span class="goal">'+Math.min(10+lvlNum,100)+'</span> food',Math.min(10+lvlNum,100),'Keep eating','Avoid yourself','Progress steadily'));
+  }
+  return L;
+})();
+
+const MAX_LEVEL = LEVELS.length;
+
+// ---------- GAME STATE ----------
+let state = 'MENU';
+let snake = [];
+let dir = {x:1,y:0};
+let nextDir = {x:1,y:0};
+let food = null;
+let powerups = [];
+let particles = [];
+let obstacles = [];
+let screenShake = 0;
+let flashAlpha = 0;
+
+let score = 0;
+let best = parseInt(localStorage.getItem('snake_best')||'0',10);
+let level = 1;
+
+let combo = 0;
+let comboTimer = 0;
+let mult = 1;
+let baseSpeed = 6;
+let speed = 6;
+let slowTimer = 0;
+let ghostTimer = 0;
+let multTimer = 0;
+let tick = 0;
+let lastTime = 0;
+let animId;
+
+let task = null;
+let taskProgress = 0;
+let powerUpsCollected = 0;
+let levelStartTick = 0;
+let dirChanges = 0;
+let edgeTimer = 0;
+let powerSeqIndex = 0;
+let powerSequence = [];
+let hintPenalty = 0;
+let hintsUsed = 0;
+
+const elScore = document.getElementById('statScore');
+const elCombo = document.getElementById('statCombo');
+const elMult = document.getElementById('statMult');
+const elLevel = document.getElementById('statLevel');
+const elBest = document.getElementById('statBest');
+const elMenuBest = document.getElementById('menuBest');
+const elMenuLevel = document.getElementById('menuLevel');
+const elMenuTask = document.getElementById('menuTask');
+const elTaskDisplay = document.getElementById('taskDisplay');
+const elTaskText = document.getElementById('taskText');
+const elTaskProg = document.getElementById('taskProg');
+const overlayMenu = document.getElementById('overlayMenu');
+const overlayLc = document.getElementById('overlayLevelComplete');
+const overlayGo = document.getElementById('overlayGameOver');
+const overlayHint = document.getElementById('overlayHint');
+const hudCenter = document.getElementById('hudCenter');
+const elBigNum = document.getElementById('bigNum');
+const elComboTag = document.getElementById('comboTag');
+const elLevelTag = document.getElementById('levelTag');
+const elFlash = document.getElementById('flash');
+const elPower = document.getElementById('powerupContainer');
+const elLcProgress = document.getElementById('lcProgress');
+const elBtnHint = document.getElementById('btnHint');
+const elHintCost = document.getElementById('hintCost');
+const elHintText = document.getElementById('hintText');
+const elHintPenalty = document.getElementById('hintPenaltyText');
+
+elBest.textContent = best;
+elMenuBest.textContent = best;
+
+function getTaskProgressText(){
+  if(!task) return '0/0';
+  const t = task.key;
+  if(t==='eat'||t==='speed_eat'||t==='no_power'||t==='size_limit'||t==='corner_food') return taskProgress + '/' + task.value;
+  if(t==='combo') return Math.max(1,combo) + '/' + task.value;
+  if(t==='time') return Math.floor((tick - levelStartTick)/60) + 's/' + task.value + 's';
+  if(t==='power') return powerUpsCollected + '/' + task.value;
+  if(t==='score') return score + '/' + task.value;
+  if(t==='maintain_combo') return Math.floor(comboTimer/60) + 's/' + task.value + 's';
+  if(t==='perfect_score') return taskProgress + '/' + task.value;
+  if(t==='zigzag') return dirChanges + '/' + task.value;
+  if(t==='edge_runner') return Math.floor(edgeTimer/60) + 's/' + task.value + 's';
+  if(t==='power_sequence') return powerSeqIndex + '/' + (powerSequence.length||1);
+  return taskProgress + '/' + task.value;
+}
+
+function updateTaskDisplay(){
+  if(state!=='PLAYING'){ elTaskDisplay.style.display='none'; return; }
+  elTaskDisplay.style.display='block';
+  elTaskText.innerHTML = task ? task.text : '';
+  elTaskProg.textContent = getTaskProgressText();
+}
+
+function newLevel(l){
+  if(l > MAX_LEVEL) l = MAX_LEVEL;
+  level = l;
+  const t = LEVELS[l-1];
+  task = { ...t };
+  taskProgress = 0;
+  powerUpsCollected = 0;
+  levelStartTick = tick;
+  dirChanges = 0;
+  edgeTimer = 0;
+  powerSeqIndex = 0;
+  powerSequence = task.powerSequence || [];
+  hintPenalty = 0;
+  hintsUsed = 0;
+  elBtnHint.disabled = false;
+  elHintCost.textContent = '-10%';
+
+  baseSpeed = 6;
+  if(task.ultraSpeed) baseSpeed = Math.floor(6 * task.ultraSpeed);
+  baseSpeed = Math.min(30, baseSpeed + Math.floor(l/3));
+  speed = baseSpeed;
+
+  slowTimer = 0; ghostTimer = 0; multTimer = 0;
+  combo = 0; comboTimer = 0; mult = 1;
+  screenShake = 0; flashAlpha = 0;
+  obstacles = [];
+  if(l > 8 || task.endurance){
+    const obsCount = Math.min(4 + Math.floor((l-8)/3), 20);
+    for(let i=0;i<obsCount;i++){
+      obstacles.push({x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)});
+    }
+  }
+
+  elLevel.textContent = level;
+  elCombo.textContent = 'x1';
+  elMult.textContent = 'x1';
+  elScore.textContent = score;
+  updateTaskDisplay();
+  food = null;
+  spawnFood();
+  if(!task.noPower && Math.random()<0.25) spawnPowerUp();
+}
+
+function resetGame(){
+  level = 1;
+  score = 0;
+  elScore.textContent = '0';
+  elBest.textContent = best;
+  newLevel(1);
+  startSnake();
+}
+
+function startSnake(){
+  snake = [{x:5,y:10},{x:4,y:10},{x:3,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  state = 'PLAYING';
+  tick = 0;
+  levelStartTick = 0;
+  overlayMenu.classList.add('hidden');
+  overlayGo.classList.add('none');
+  overlayLc.classList.add('none');
+  overlayHint.classList.add('none');
+  lastTime = performance.now();
+  animId = requestAnimationFrame(loop);
+}
+
+function spawnFood(){
+  if(!food) food = {};
+  let attempts = 0;
+  let pos;
+  do {
+    pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
+    attempts++;
+    if(attempts > 3000) return;
+  } while(
+    snake.some(s=>s.x===pos.x && s.y===pos.y) ||
+    (food && food.x===pos.x && food.y===pos.y) ||
+    powerups.some(p=>p.x===pos.x && p.y===pos.y) ||
+    obstacles.some(o=>o.x===pos.x && o.y===pos.y)
+  );
+  food = {...pos, type: Math.random()<0.08?'gold':'normal'};
+  updateTaskDisplay();
+}
+
+function spawnPowerUp(){
+  if(task.noPower) return;
+  if(powerups.length>=3) return;
+  const types = ['slow','mult','ghost'];
+  const t = types[Math.floor(Math.random()*types.length)];
+  let pos;
+  let attempts = 0;
+  do {
+    pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
+    attempts++;
+    if(attempts > 3000) return;
+  } while(
+    snake.some(s=>s.x===pos.x && s.y===pos.y) ||
+    (food && food.x===pos.x && food.y===pos.y) ||
+    powerups.some(p=>p.x===pos.x && p.y===pos.y) ||
+    obstacles.some(o=>o.x===pos.x && o.y===pos.y)
+  );
+  powerups.push({...pos, type: t, life: 500});
+}
+
+function updatePowerUI(){
+  elPower.innerHTML = '';
+  const map = {slow:{label:'SLOW',cls:'slow'},mult:{label:'2X',cls:'mult'},ghost:{label:'GHOST',cls:'ghost'}};
+  const active = [];
+  if(slowTimer>0) active.push(map.slow);
+  if(multTimer>0) active.push(map.mult);
+  if(ghostTimer>0) active.push(map.ghost);
+  active.forEach(a=>{
+    const d = document.createElement('div');
+    d.className = 'pill '+a.cls;
+    d.textContent = a.label;
+    elPower.appendChild(d);
+  });
+}
+
+function applyPower(t){
+  if(t==='slow'){ slowTimer = 500; speed = Math.max(3, baseSpeed-3); powerSound(); }
+  if(t==='mult'){ multTimer = 450; mult = 2; powerSound(); }
+  if(t==='ghost'){ ghostTimer = 350; powerSound(); }
+  updatePowerUI();
+}
+
+function addParticles(x, y, color, count=10){
+  const px = x*GS + GS/2, py = y*GS + GS/2;
+  for(let i=0;i<count;i++){
+    particles.push({x:px,y:py,vx:(Math.random()-0.5)*8,vy:(Math.random()-0.5)*8,life:20+Math.random()*25,color});
+  }
+}
+
+function flash(){ flashAlpha = 0.5; screenShake = 16; }
+
+function showCenter(text, sub, color){
+  elBigNum.textContent = text;
+  elComboTag.textContent = sub;
+  elComboTag.style.color = color;
+  elLevelTag.style.display = 'none';
+  hudCenter.style.opacity = '1';
+  setTimeout(()=>{ hudCenter.style.opacity='0'; }, 700);
+}
+
+function levelComplete(){
+  initAudio();
+  levelUpSound();
+  state = 'LEVELCOMPLETE';
+  let bonus = level * 150 + taskProgress * 5;
+  if(hintPenalty>0){
+    bonus = Math.floor(bonus * (1 - hintPenalty/100));
+  }
+  score += bonus;
+  elScore.textContent = score;
+  document.getElementById('lcReward').textContent = '+' + bonus + ' bonus';
+  document.getElementById('lcPenalty').textContent = hintPenalty>0 ? ('Hint penalty applied: -'+hintPenalty+'%') : '';
+  if(score>best){ best=score; localStorage.setItem('snake_best', String(best)); elBest.textContent=best; elMenuBest.textContent=best; }
+  overlayMenu.classList.add('hidden');
+  overlayGo.classList.add('none');
+  overlayLc.classList.remove('none');
+  elLcProgress.style.width = '100%';
+  cancelAnimationFrame(animId);
+}
+
+function gameOver(){
+  initAudio();
+  dieSound();
+  state = 'GAMEOVER';
+  document.getElementById('goScore').textContent = score;
+  document.getElementById('goBest').textContent = best;
+  overlayMenu.classList.add('hidden');
+  overlayLc.classList.add('none');
+  overlayGo.classList.remove('none');
+  hudCenter.style.opacity = '0';
+  cancelAnimationFrame(animId);
+}
+
+function checkLevelComplete(){
+  if(!task) return;
+  let done = false;
+  const t = task.key;
+  const survived = (tick - levelStartTick)/60;
+
+  if(t==='eat' && taskProgress >= task.value) done = true;
+  if(t==='combo' && combo >= task.value) done = true;
+  if(t==='time' && survived >= task.value) done = true;
+  if(t==='power' && powerUpsCollected >= task.value) done = true;
+  if(t==='score' && score >= task.value) done = true;
+  if(t==='speed_eat' && taskProgress >= task.value && survived <= (task.timeLimit||60)) done = true;
+  if(t==='speed_eat' && survived > (task.timeLimit||60) && taskProgress < task.value){ gameOver(); return; }
+  if(t==='no_power' && taskProgress >= task.value) done = true;
+  if(t==='maintain_combo' && comboTimer >= (task.holdTime||15)*60) done = true;
+  if(t==='maintain_combo' && combo < (task.comboMin||3)){ gameOver(); return; }
+  if(t==='perfect_score' && taskProgress >= task.value) done = true;
+  if(t==='size_limit' && taskProgress >= task.value && snake.length <= task.sizeLimit) done = true;
+  if(t==='size_limit' && snake.length > task.sizeLimit){ gameOver(); return; }
+  if(t==='corner_food' && taskProgress >= task.value) done = true;
+  if(t==='edge_runner' && edgeTimer >= task.value*60) done = true;
+  if(t==='zigzag' && dirChanges >= task.value) done = true;
+  if(t==='no_walls' && taskProgress >= task.value) done = true;
+  if(t==='power_sequence' && powerSeqIndex >= (powerSequence.length||0)) done = true;
+  if(t==='center_avoid' && survived >= task.value) done = true;
+  if(t==='ultra_speed' && taskProgress >= task.value) done = true;
+  if(t==='blind_spots' && taskProgress >= task.value) done = true;
+  if(t==='reverse_controls' && taskProgress >= task.value) done = true;
+  if(t==='endurance' && taskProgress >= task.value) done = true;
+  if(t==='double_challenge'){
+    let c1 = taskProgress >= task.value;
+    let c2 = combo >= (task.comboGoal||task.value);
+    if(task.timeLimit && survived > task.timeLimit){ gameOver(); return; }
+    done = c1 && c2;
+  }
+  if(t==='boss_level'){
+    done = combo >= (task.comboGoal||50) && score >= (task.scoreGoal||15000) && survived >= (task.timeLimit||600) && taskProgress >= 100;
+  }
+
+  if(done && level < MAX_LEVEL){
+    levelComplete();
+  } else if(done && level >= MAX_LEVEL){
+    gameOver();
+  }
+}
+
+function update(){
+  if(state!=='PLAYING') return;
+  tick++;
+  if(levelStartTick===0) levelStartTick = tick;
+
+  dir = nextDir;
+  let moveEvery = speed;
+  if(slowTimer>0) moveEvery = speed + 4;
+  if(tick % moveEvery !== 0) return;
+
+  const head = {...snake[0]};
+  head.x += dir.x;
+  head.y += dir.y;
+
+  if(head.x < 0) head.x = COLS-1;
+  if(head.x >= COLS) head.x = 0;
+  if(head.y < 0) head.y = ROWS-1;
+  if(head.y >= ROWS) head.y = 0;
+
+  if(obstacles.some(o=>o.x===head.x && o.y===head.y)){
+    gameOver(); return;
+  }
+  if(ghostTimer<=0 && snake.some(s=>s.x===head.x && s.y===head.y)){
+    gameOver(); return;
+  }
+
+  if(task.centerAvoid){
+    const cx2 = COLS/2, cy2 = ROWS/2;
+    if(head.x>=cx2-2 && head.x<=cx2+2 && head.y>=cy2-2 && head.y<=cy2+2){
+      gameOver(); return;
+    }
+  }
+
+  snake.unshift(head);
+
+  let ate = false;
+  if(food && head.x===food.x && head.y===food.y){
+    ate = true;
+    addParticles(head.x, head.y, food.type==='gold'?WARN:ACCENT, 16);
+    score += 10 * mult;
+    taskProgress++;
+    combo++;
+    comboTimer = 120;
+    if(combo>1){
+      playTone(460 + combo*75, 'triangle', 0.08, 0.1);
+      showCenter('+' + (10*mult*combo), 'COMBO x'+combo, ACCENT2);
+    } else {
+      eatSound();
+      showCenter('+' + (10*mult), '+10', ACCENT);
+    }
+    if(combo>=3) flash();
+
+    if(task.cornerFood){
+      const isCorner = (head.x<3||head.x>=COLS-3)&&(head.y<3||head.y>=ROWS-3);
+      if(isCorner){ taskProgress++; } else { taskProgress = Math.max(0, taskProgress-1); }
+    }
+    if(task.perfectScore){ taskProgress++; }
+
+    snake.push({...snake[snake.length-1]});
+    spawnFood();
+    if(!task.noPower && Math.random()<0.18) spawnPowerUp();
+  } else {
+    snake.pop();
+  }
+
+  if(task.edgeRunner){
+    if(head.x<3||head.x>=COLS-3||head.y<3||head.y>=ROWS-3){
+      edgeTimer++;
+    }
+  }
+
+  for(let i=powerups.length-1;i>=0;i--){
+    const p = powerups[i];
+    if(head.x===p.x && head.y===p.y){
+      if(task.powerSequence){
+        const expected = powerSequence[powerSeqIndex];
+        if(p.type===expected){
+          applyPower(p.type);
+          powerSeqIndex++;
+          powerUpsCollected++;
+        } else {
+          hintPenalty = Math.min(90, hintPenalty + 10);
+          elHintCost.textContent = '-'+hintPenalty+'%';
+        }
+      } else {
+        applyPower(p.type);
+        powerUpsCollected++;
+      }
+      powerups.splice(i,1);
+      updatePowerUI();
+      addParticles(head.x, head.y, '#fff', 12);
+    } else {
+      p.life--;
+      if(p.life<=0){ powerups.splice(i,1); updatePowerUI(); }
+    }
+  }
+
+  if(slowTimer>0){ slowTimer--; if(slowTimer<=0){ speed = baseSpeed; updatePowerUI(); } }
+  if(ghostTimer>0){ ghostTimer--; if(ghostTimer<=0) updatePowerUI(); }
+  if(multTimer>0){ multTimer--; if(multTimer<=0){ mult=1; updatePowerUI(); } }
+
+  if(comboTimer>0){ comboTimer--; if(comboTimer<=0){ combo=0; elCombo.textContent='x1'; } }
+  if(task.maintainCombo && comboTimer<=0){ gameOver(); return; }
+
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vx*=0.88; p.vy*=0.88; p.life--;
+    if(p.life<=0) particles.splice(i,1);
+  }
+
+  if(task.endurance && tick % 180 === 0){
+    obstacles.push({x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)});
+  }
+
+  elCombo.textContent = 'x'+Math.max(1,combo);
+  elMult.textContent = mult>1?'x'+mult:'x1';
+  elScore.textContent = score;
+  updateTaskDisplay();
+  checkLevelComplete();
+
+  if(screenShake>0) screenShake--;
+  if(flashAlpha>0){ flashAlpha -= 0.08; if(flashAlpha<0) flashAlpha=0; }
+}
+
+function draw(){
+  ctx.save();
+  if(screenShake>0){
+    ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
+  }
+  ctx.fillStyle = '#07070c';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#0f0f1a';
+  ctx.lineWidth = 1;
+  for(let i=0;i<=COLS;i++){ ctx.beginPath(); ctx.moveTo(i*GS,0); ctx.lineTo(i*GS,canvas.height); ctx.stroke(); }
+  for(let i=0;i<=ROWS;i++){ ctx.beginPath(); ctx.moveTo(0,i*GS); ctx.lineTo(canvas.width,i*GS); ctx.stroke(); }
+
+  obstacles.forEach(o=>{
+    ctx.fillStyle = '#ff4444';
+    ctx.globalAlpha = 0.7 + 0.3*Math.sin(Date.now()/200);
+    ctx.beginPath(); ctx.roundRect(o.x*GS+2, o.y*GS+2, GS-4, GS-4, 4); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  const showFood = !task.blindSpots || (Math.abs(snake[0].x - food.x) + Math.abs(snake[0].y - food.y) <= 3);
+  if(food && showFood){
+    const g = ctx.createRadialGradient(food.x*GS+GS/2, food.y*GS+GS/2, 2, food.x*GS+GS/2, food.y*GS+GS/2, GS/2);
+    if(food.type==='gold'){
+      g.addColorStop(0,WARN); g.addColorStop(1,'transparent');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(food.x*GS+GS/2, food.y*GS+GS/2, GS/2-2, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle=WARN; ctx.lineWidth=2; ctx.stroke();
+    } else {
+      g.addColorStop(0,ACCENT); g.addColorStop(1,'transparent');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(food.x*GS+GS/2, food.y*GS+GS/2, GS/2-2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  powerups.forEach(p=>{
+    const c = p.type==='slow'?ACCENT: p.type==='mult'?ACCENT3:ACCENT2;
+    ctx.fillStyle = c;
+    ctx.globalAlpha = 0.5 + 0.5*Math.sin(Date.now()/120);
+    ctx.beginPath(); ctx.arc(p.x*GS+GS/2, p.y*GS+GS/2, GS/2-3, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  snake.forEach((s,i)=>{
+    const isHead = i===0;
+    ctx.shadowBlur = isHead?22:0;
+    ctx.shadowColor = isHead? ACCENT : 'transparent';
+    ctx.fillStyle = isHead ? '#fff' : `hsl(${170 + (i/snake.length)*80}, 85%, 55%)`;
+    const r = ghostTimer>0 ? 2 : GS-2;
+    ctx.beginPath();
+    ctx.roundRect(s.x*GS+1, s.y*GS+1, r, r, isHead?6:4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if(isHead){
+      ctx.fillStyle='#000';
+      const ex = dir.x===1?GS-6: dir.x===-1?6: GS/2-2;
+      const ey = dir.y===1?GS-6: dir.y===-1?6: GS/2-2;
+      ctx.fillRect(s.x*GS+ex, s.y*GS+ey, 5, 5);
+      ctx.fillRect(s.x*GS+(dir.x!==0?GS/2-2: ex+7), s.y*GS+(dir.y!==0?GS/2-2: ey+7), 5, 5);
+    }
+  });
+
+  particles.forEach(p=>{
+    ctx.globalAlpha = p.life/45;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+  ctx.restore();
+}
+
+function loop(now){
+  const dt = now - lastTime;
+  lastTime = now;
+  update();
+  draw();
+  if(state==='PLAYING') animId = requestAnimationFrame(loop);
+}
+
+function setDir(dx,dy){
+  if(state!=='PLAYING') return;
+  let ndx = dx, ndy = dy;
+  if(task.reverseControls){ ndx = -dx; ndy = -dy; }
+  if(ndx === -dir.x && ndy === -dir.y) return;
+  nextDir = {x:ndx,y:ndy};
+}
+
+window.addEventListener('keydown', e=>{
+  if(e.key==='ArrowUp'||e.key==='w') setDir(0,-1);
+  else if(e.key==='ArrowDown'||e.key==='s') setDir(0,1);
+  else if(e.key==='ArrowLeft'||e.key==='a') setDir(-1,0);
+  else if(e.key==='ArrowRight'||e.key==='d') setDir(1,0);
+});
+
+let touchX=0, touchY=0;
+canvas.addEventListener('touchstart', e=>{ touchX=e.touches[0].clientX; touchY=e.touches[0].clientY; },{passive:false});
+canvas.addEventListener('touchend', e=>{
+  if(!e.changedTouches[0]) return;
+  const dx = e.changedTouches[0].clientX - touchX;
+  const dy = e.changedTouches[0].clientY - touchY;
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(Math.abs(dx)>35) setDir(dx>0?1:0, 0);
+  } else {
+    if(Math.abs(dy)>35) setDir(0, dy>0?1:-1);
+  }
+},{passive:false});
+
+document.querySelectorAll('.dpad-arrow').forEach(b=>{
+  b.addEventListener('pointerdown', ()=>setDir(
+    b.dataset.dir==='right'?1:b.dataset.dir==='left'?-1:0,
+    b.dataset.dir==='down'?1:b.dataset.dir==='up'?-1:0
+  ));
+});
+
+function updateHintButton(){
+  if(!elBtnHint) return;
+  if(hintsUsed>=3){
+    elBtnHint.disabled = true;
+    elBtnHint.textContent = '💡 No more hints';
+    if(elHintCost) elHintCost.textContent = '';
+  } else {
+    const nextPenalty = hintsUsed===0 ? 10 : (hintsUsed===1 ? 25 : 50);
+    if(elHintCost) elHintCost.textContent = '-'+nextPenalty+'%';
+  }
+}
+
+function $el(id){ return document.getElementById(id); }
+function $on(id, cb){ const e=$el(id); if(e) e.addEventListener('click', cb); }
+
+elBtnHint.addEventListener('click', ()=>{
+  if(state!=='PLAYING' || hintsUsed>=3) return;
+  hintsUsed++;
+  let penalty = 0;
+  let text = '';
+  if(hintsUsed===1){ penalty=10; text=task.hint1; }
+  else if(hintsUsed===2){ penalty=25; text=task.hint2; }
+  else { penalty=50; text=task.hint3; }
+  hintPenalty = penalty;
+  if(elHintPenalty) elHintPenalty.textContent = '-'+penalty+'%';
+  if(elHintText) elHintText.textContent = text;
+  overlayHint.classList.remove('none');
+  updateHintButton();
+});
+
+$on('btnCloseHint', ()=>{ overlayHint.classList.add('none'); });
+
+$on('btnStart', ()=>{
+  initAudio();
+  resetGame();
+  startSnake();
+});
+$on('btnRetry', ()=>{
+  initAudio();
+  resetGame();
+  startSnake();
+});
+$on('btnMenu', ()=>{
+  state='MENU';
+  overlayGo.classList.add('none');
+  overlayLc.classList.add('none');
+  overlayHint.classList.add('none');
+  overlayMenu.classList.remove('hidden');
+  cancelAnimationFrame(animId);
+});
+$on('btnMenuGo', ()=>{
+  state='MENU';
+  overlayGo.classList.add('none');
+  overlayLc.classList.add('none');
+  overlayHint.classList.add('none');
+  overlayMenu.classList.remove('hidden');
+  cancelAnimationFrame(animId);
+});
+$on('btnMenuLc', ()=>{
+  state='MENU';
+  overlayLc.classList.add('none');
+  overlayHint.classList.add('none');
+  overlayMenu.classList.remove('hidden');
+  cancelAnimationFrame(animId);
+});
+$on('btnNextLevel', ()=>{
+  initAudio();
+  overlayLc.classList.add('none');
+  overlayHint.classList.add('none');
+  if(level >= MAX_LEVEL){
+    overlayMenu.classList.remove('hidden');
+    if(elMenuLevel) elMenuLevel.textContent = 'MAX';
+    if(elMenuTask) elMenuTask.innerHTML = '<b>You conquered all 120 levels!</b>';
+    cancelAnimationFrame(animId);
+    return;
+  }
+  newLevel(level + 1);
+  startSnake();
+});
+$on('btnReset', ()=>{
+  best=0; localStorage.removeItem('snake_best'); elBest.textContent='0'; elMenuBest.textContent='0';
+});
+
+function renderMenuTask(){
+  if(state!=='MENU') return;
+  const t = LEVELS[level-1] || {text:'Ready', value:0};
+  if(elMenuLevel) elMenuLevel.textContent = level;
+  if(elMenuTask) elMenuTask.innerHTML = '<b>Level ' + level + '/' + MAX_LEVEL + ':</b><br>' + t.text;
+}
+
+renderMenuTask();
+draw();
+updateHintButton();
+</script>
+</body>
+</html>
